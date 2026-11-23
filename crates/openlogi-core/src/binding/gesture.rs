@@ -1,8 +1,11 @@
 //! Gesture-button direction slots (swipe + click).
 
+use std::collections::BTreeMap;
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
+
+use super::Action;
 
 /// One of the five sub-bindings on the gesture button: hold + swipe up/down/
 /// left/right or a plain click without movement. Logi ships these as
@@ -68,4 +71,27 @@ impl fmt::Display for GestureDirection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.label())
     }
+}
+
+/// The axes a gesture-direction map pans along while its button is held.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PanAxes {
+    /// Left or Right is [`Action::Pan`]: horizontal travel scrolls sideways.
+    pub horizontal: bool,
+    /// Up or Down is [`Action::Pan`]: vertical travel scrolls the page.
+    pub vertical: bool,
+}
+
+/// Which axes `map` pans along, or `None` when no direction is
+/// [`Action::Pan`]. An axis whose directions name other actions keeps
+/// committing them as swipes, so one button can, say, pan vertically and
+/// switch desktops horizontally.
+#[must_use]
+pub fn pan_axes(map: &BTreeMap<GestureDirection, Action>) -> Option<PanAxes> {
+    let pans = |direction| map.get(&direction) == Some(&Action::Pan);
+    let axes = PanAxes {
+        horizontal: pans(GestureDirection::Left) || pans(GestureDirection::Right),
+        vertical: pans(GestureDirection::Up) || pans(GestureDirection::Down),
+    };
+    (axes.horizontal || axes.vertical).then_some(axes)
 }

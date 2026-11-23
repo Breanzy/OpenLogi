@@ -45,7 +45,7 @@ pub use g_keys::{GKey, GKeyProfile, GKeySlot, ModeKey};
 pub use gaming::{
     G502_LIGHTSPEED, G903_LIGHTSPEED, GamingButtons, GamingLayout, STANDARD_BUTTONS, Slot,
 };
-pub use gesture::GestureDirection;
+pub use gesture::{GestureDirection, PanAxes, pan_axes};
 pub use key_combo::{KeyCombo, KeyComboParseError, KeyboardUsage, KeyboardUsageError};
 pub use modifiers::{BareModifiers, BareModifiersParseError, Modifiers};
 pub use swipe::{

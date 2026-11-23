@@ -1044,3 +1044,48 @@ fn a_key_shows_its_press_action_or_nothing_when_unbound() {
         assert_eq!(binding.key_action(), shown, "{binding:?}");
     }
 }
+
+#[test]
+fn pan_is_a_gesture_direction_only_action() {
+    use GestureDirection::{Click, Down, Left, Right, Up};
+
+    use crate::binding::{Effect, PanAxes, pan_axes};
+
+    assert!(
+        !Action::catalog().contains(&Action::Pan),
+        "offered only by gesture pickers"
+    );
+    assert!(matches!(Action::Pan.effect(), Effect::None));
+    assert_eq!(Action::Pan.label(), "Pan");
+    assert_eq!(
+        toml::Value::try_from(Action::Pan).unwrap(),
+        toml::Value::String("Pan".into())
+    );
+
+    let map = |entries: &[(GestureDirection, Action)]| entries.iter().cloned().collect();
+    assert_eq!(pan_axes(&map(&[(Click, Action::MiddleClick)])), None);
+    assert_eq!(
+        pan_axes(&map(&[
+            (Up, Action::Pan),
+            (Down, Action::Pan),
+            (Left, Action::Pan),
+            (Right, Action::Pan),
+        ])),
+        Some(PanAxes {
+            horizontal: true,
+            vertical: true
+        })
+    );
+    assert_eq!(
+        pan_axes(&map(&[
+            (Up, Action::Pan),
+            (Left, Action::PreviousDesktop),
+            (Right, Action::NextDesktop),
+        ])),
+        Some(PanAxes {
+            horizontal: false,
+            vertical: true
+        }),
+        "a swiping axis stays a swipe"
+    );
+}

@@ -193,7 +193,9 @@ pub use succession::Identity;
 ///      `Action::{EasySwitchChannel1, EasySwitchChannel2, EasySwitchChannel3}`
 ///      and `ActionRingIcon::{Channel1, Channel2, Channel3}` appended after
 ///      them — a device's move to another Easy-Switch channel, bound to a
-///      button or an Actions Ring slot.
+///      button or an Actions Ring slot. `Action::Pan` appended after them —
+///      a gesture direction that scrolls with the held button's travel, as
+///      Logi Options+'s Pan gesture does.
 pub const PROTOCOL_VERSION: u32 = 46;
 
 /// Environment variable through which the agent hands a supervised helper the

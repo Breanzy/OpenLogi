@@ -114,6 +114,7 @@ pub(crate) fn action_icon_path(action: &Action) -> &'static str {
         Action::ScrollDown | Action::PreviousDpiPreset => "action-icons/chevrons-down.svg",
         Action::HorizontalScrollLeft => "action-icons/chevrons-left.svg",
         Action::HorizontalScrollRight => "action-icons/chevrons-right.svg",
+        Action::Pan => GESTURE_BUTTON_ICON,
         Action::CustomShortcut(_)
         | Action::HoldShortcut(_)
         | Action::TapKeyHoldingModifiers(_)
@@ -428,6 +429,7 @@ mod tests {
             Action::RunShellCommand(String::new()),
             Action::RunAppleScript(String::new()),
             Action::Workflow(Vec::new()),
+            Action::Pan,
             Action::OpenApplication(
                 ApplicationTarget::new("/usr/bin/true", "true").expect("non-empty path"),
             ),

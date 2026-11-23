@@ -225,7 +225,9 @@ impl Action {
     #[must_use]
     pub fn effect(&self) -> Effect<'_> {
         match self {
-            Action::None => Effect::None,
+            // Pan scrolls from held travel (gesture dispatch); the committed
+            // direction that names it has nothing more to do.
+            Action::None | Action::Pan => Effect::None,
 
             Action::LeftClick => Effect::Click(MouseButton::Left),
             Action::RightClick => Effect::Click(MouseButton::Right),

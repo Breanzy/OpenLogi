@@ -514,7 +514,13 @@ fn gesture_inspector(
                 Some(&current),
                 picker,
                 ActionOffer {
-                    extra: &[],
+                    // Pan scrolls with the travel of a swipe, so a click has
+                    // nothing to pan.
+                    extra: if direction == GestureDirection::Click {
+                        &[]
+                    } else {
+                        &[Action::Pan]
+                    },
                     hidden: data.hidden_actions,
                 },
                 &on_pick,

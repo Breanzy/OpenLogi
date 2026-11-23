@@ -6,7 +6,9 @@ use std::collections::{HashMap, HashSet};
 use std::num::NonZeroU8;
 use std::time::Instant;
 
-use openlogi_core::binding::{Action, Binding, ButtonId, HeldWheel, default_binding};
+use openlogi_core::binding::{
+    Action, Binding, ButtonId, HeldWheel, PanAxes, default_binding, pan_axes,
+};
 use openlogi_core::config::ThumbwheelSensitivity;
 use openlogi_core::scroll::ScrollDelta;
 use openlogi_hid::CapturedInput;
@@ -273,6 +275,9 @@ impl InputDispatcher {
                 delta,
                 per_notch,
             } => self.dispatch_held_wheel(session, plan, button, delta, per_notch),
+            CapturedInput::HeldMotion { button, dx, dy } => {
+                self.dispatch_held_motion(session, plan, button, dx, dy);
+            }
             CapturedInput::MainWheel { delta, per_notch } => self.outputs.post_main_wheel_scroll(
                 session,
                 main_wheel_scroll(
@@ -346,6 +351,33 @@ impl InputDispatcher {
         }
     }
 
+    /// Pan: scroll by a held gesture button's travel along each axis its map
+    /// pans. The raw-XY divert already keeps the pointer still, and the
+    /// scroll is posted directly, unsmoothed, so the page tracks the hand.
+    fn dispatch_held_motion(
+        &mut self,
+        session: &HidppSessionId,
+        plan: &DispatchPlan,
+        button: ButtonId,
+        dx: i16,
+        dy: i16,
+    ) {
+        if self.held_presses.get(session, button).is_none() {
+            debug!(key = session.device_key(), %button, "pan travel from a canceled button lifecycle — ignored");
+            return;
+        }
+        let Some(axes) = plan
+            .gesture_bindings
+            .get(&button)
+            .or_else(|| plan.side_gesture_bindings.get(&button))
+            .and_then(pan_axes)
+        else {
+            return;
+        };
+        let delta = pan_scroll(dx, dy, axes, plan.invert_wheel, cfg!(target_os = "macos"));
+        openlogi_inject::post_scroll(delta);
+    }
+
     fn dispatch_wheel(
         &mut self,
         session: &HidppSessionId,
@@ -394,6 +426,43 @@ fn held_wheel_scroll(delta: i16, per_notch: NonZeroU8, inverted: bool) -> Scroll
     let notches = f64::from(delta) / f64::from(per_notch.get());
     let rightward = if inverted { notches } else { -notches };
     ScrollDelta::wheel_ticks(rightward, 0.0)
+}
+
+/// Pixels of pan per sensor count of travel, where the platform takes pixels.
+const PAN_PIXELS_PER_COUNT: f64 = 1.0;
+/// Sensor counts of travel per wheel tick of pan, where it takes ticks.
+const PAN_COUNTS_PER_TICK: f64 = 40.0;
+
+/// The scroll a pan's held travel stands for. Travel toward the user moves
+/// the view down the document and travel rightward moves it right, as
+/// Logi Options+'s Pan does; the device's scroll inversion reverses both
+/// (a "grab the page" pan). Synthesised scrolling is not subject to the
+/// OS's natural scrolling, so that setting needs no correction. An axis the
+/// map does not pan stays still. macOS takes smooth pixels; Linux and
+/// Windows take fractional wheel ticks, which their quantisers accumulate.
+fn pan_scroll(dx: i16, dy: i16, axes: PanAxes, inverted: bool, pixels: bool) -> ScrollDelta {
+    let sign = if inverted { -1.0 } else { 1.0 };
+    let rightward = if axes.horizontal {
+        sign * f64::from(dx)
+    } else {
+        0.0
+    };
+    let upward = if axes.vertical {
+        -sign * f64::from(dy)
+    } else {
+        0.0
+    };
+    if pixels {
+        ScrollDelta::pixels(
+            rightward * PAN_PIXELS_PER_COUNT,
+            upward * PAN_PIXELS_PER_COUNT,
+        )
+    } else {
+        ScrollDelta::wheel_ticks(
+            rightward / PAN_COUNTS_PER_TICK,
+            upward / PAN_COUNTS_PER_TICK,
+        )
+    }
 }
 
 /// The scroll a diverted main wheel's movement stands for: `delta` units

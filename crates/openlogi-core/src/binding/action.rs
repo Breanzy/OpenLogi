@@ -264,6 +264,13 @@ pub enum Action {
     EasySwitchChannel2,
     /// Move the device to its third Easy-Switch channel.
     EasySwitchChannel3,
+    /// Pan: a gesture direction that scrolls with the pointer's travel while
+    /// its button is held, as Logi Options+'s Pan gesture does. Only a
+    /// gesture-direction map gives it meaning (see [`pan_axes`]); fired as a
+    /// plain action it does nothing. Appended — variant order is wire format.
+    ///
+    /// [`pan_axes`]: crate::binding::pan_axes
+    Pan,
 }
 
 /// Which of a held chord's keys stay down for the lifetime of the press.
@@ -387,6 +394,8 @@ macro_rules! for_each_unit_action {
             ScrollDown "Scroll Down" "actions.scroll_down" Scroll ArrowDown,
             HorizontalScrollLeft "Scroll Left" "actions.scroll_left" Scroll ScrollLeft,
             HorizontalScrollRight "Scroll Right" "actions.scroll_right" Scroll ScrollRight,
+            // Offered only in gesture-direction pickers.
+            Pan "Pan" "actions.pan" Scroll Pointer not_pickable,
         }
     };
 }

@@ -105,6 +105,19 @@ pub enum CapturedInput {
         /// the wheel's `0x2121` multiplier for a high-resolution one.
         per_notch: NonZeroU8,
     },
+    /// Pointer travel while a gesture button listed in
+    /// [`CaptureSpec::stream_motion`] is held, one event per raw-XY report.
+    /// The raw-XY divert keeps the pointer still, so the agent can turn this
+    /// travel into a pan (continuous scrolling). Emitted alongside the
+    /// swipe detection, never instead of it.
+    HeldMotion {
+        /// The held button the travel belongs to.
+        button: ButtonId,
+        /// Sensor counts; positive is rightward.
+        dx: i16,
+        /// Sensor counts; positive is toward the user.
+        dy: i16,
+    },
     /// Main-wheel movement the firmware reports over `0x2121` instead of
     /// scrolling, while the session diverts the wheel so the agent can post
     /// smoothed scrolling for it.
@@ -205,6 +218,10 @@ pub struct CaptureSpec {
     pub divert_main_wheel: Option<MainWheelDivert>,
     /// G-series host mode or onboard profile.
     pub onboard: Option<OnboardTarget>,
+    /// Gesture buttons whose raw-XY travel is also streamed as
+    /// [`CapturedInput::HeldMotion`] while held: those with a pan direction.
+    /// Only a button armed with raw XY has travel to stream.
+    pub stream_motion: Vec<ButtonId>,
 }
 
 /// Capture the controls selected by `spec` on `route` until `host.shutdown`
@@ -264,9 +281,10 @@ struct GestureCapture {
 
 impl GestureCapture {
     fn new(armed: ArmedControls) -> Self {
+        let accum = CaptureAccum::streaming(armed.motion_buttons.clone());
         Self {
             armed,
-            accum: Arc::default(),
+            accum: Arc::new(Mutex::new(accum)),
             thumb_status: Arc::new(Mutex::new(RotationStatus::Inactive)),
             spy_edges: Arc::default(),
         }

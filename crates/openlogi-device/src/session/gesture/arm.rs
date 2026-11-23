@@ -44,6 +44,8 @@ pub(super) struct ArmedControls {
     /// Raw-XY-capable additional CIDs diverted as gesture sources (side
     /// buttons on supported desktops and a gesture-mode DPI/ModeShift button).
     pub(super) gesture_button_cids: Vec<(u16, ButtonId)>,
+    /// Gesture buttons whose held travel is streamed ([`CaptureSpec::stream_motion`]).
+    pub(super) motion_buttons: Vec<ButtonId>,
     /// DPI/ModeShift CIDs diverted as plain buttons when gesture mode is off.
     pub(super) dpi_cids: Vec<u16>,
     /// Standard-button CIDs diverted per the session's [`CaptureSpec`], with
@@ -284,6 +286,7 @@ pub(super) async fn arm_controls_into(
     spec: &CaptureSpec,
     armed: &mut ArmedControls,
 ) -> Result<(), CaptureError> {
+    armed.motion_buttons.clone_from(&spec.stream_motion);
     if let Some(info) = device
         .root()
         .get_feature(reprog_controls::FEATURE_ID)

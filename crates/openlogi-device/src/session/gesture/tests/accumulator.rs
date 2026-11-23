@@ -903,3 +903,61 @@ fn raw_wheel_that_cannot_be_attributed_or_scaled_is_dropped() {
     );
     assert_eq!(held_wheel(&mut rx), []);
 }
+
+/// A pan button streams every raw-XY report of its hold as held motion,
+/// after the stale first sample, while still detecting the swipe; a button
+/// not listed for streaming only swipes.
+#[test]
+fn a_pan_button_streams_its_held_travel() {
+    let middle = (0x0052, ButtonId::MiddleClick);
+    for streamed in [true, false] {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let mut acc = if streamed {
+            CaptureAccum::streaming(vec![ButtonId::MiddleClick])
+        } else {
+            CaptureAccum::default()
+        };
+        let buttons = [middle];
+        let down = RawControlEvent::DivertedButtons([middle.0, 0, 0, 0]);
+        acc.on_event(down, &[], &[], &buttons, &[], &tx);
+        acc.backdate_hold_for_test();
+        for (dx, dy) in [(-3000, 2400), (0, 30), (4, 90)] {
+            acc.on_event(
+                RawControlEvent::RawXy { dx, dy },
+                &[],
+                &[],
+                &buttons,
+                &[],
+                &tx,
+            );
+        }
+        acc.on_event(release(), &[], &[], &buttons, &[], &tx);
+
+        let mut motion = Vec::new();
+        let mut gestures = Vec::new();
+        while let Ok(input) = rx.try_recv() {
+            match input {
+                CapturedInput::HeldMotion { button, dx, dy } => motion.push((button, dx, dy)),
+                CapturedInput::Gesture(button, direction) => gestures.push((button, direction)),
+                _ => {}
+            }
+        }
+        assert_eq!(
+            motion,
+            if streamed {
+                vec![
+                    (ButtonId::MiddleClick, 0, 30),
+                    (ButtonId::MiddleClick, 4, 90),
+                ]
+            } else {
+                vec![]
+            },
+            "streamed: {streamed}"
+        );
+        assert_eq!(
+            gestures,
+            vec![(ButtonId::MiddleClick, GestureDirection::Down)],
+            "the swipe is still detected, so the hold does not end as a click"
+        );
+    }
+}

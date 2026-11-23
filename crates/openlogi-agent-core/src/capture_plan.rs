@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use openlogi_core::binding::{
-    Action, Binding, ButtonId, GamingLayout, GestureDirection, default_binding,
+    Action, Binding, ButtonId, GamingLayout, GestureDirection, default_binding, pan_axes,
 };
 use openlogi_core::bindings::{
     button_bindings_for, hidpp_gesture_maps_for, oshook_gestures_for, tilt_gestures_for,
@@ -330,6 +330,20 @@ fn standard_gesture_buttons(
         .collect()
 }
 
+/// The HID++ gesture buttons with a pan direction, whose held travel the
+/// session streams for the pan.
+fn pan_buttons(
+    gesture_bindings: &BTreeMap<ButtonId, BTreeMap<GestureDirection, Action>>,
+    side_gesture_bindings: &BTreeMap<ButtonId, BTreeMap<GestureDirection, Action>>,
+) -> Vec<ButtonId> {
+    gesture_bindings
+        .iter()
+        .chain(side_gesture_bindings)
+        .filter(|(_, map)| pan_axes(map).is_some())
+        .map(|(button, _)| *button)
+        .collect()
+}
+
 /// Build one device's plan from the config (per-app effective for `app`).
 #[must_use]
 pub fn plan_for_device(
@@ -421,6 +435,7 @@ pub fn plan_for_device(
         })
         .collect();
     side_gesture_bindings.extend(tilt_gestures);
+    let stream_motion = pan_buttons(&gesture_bindings, &side_gesture_bindings);
     let thumbwheel_bindings_nondefault = [
         ButtonId::Thumbwheel,
         ButtonId::ThumbwheelScrollUp,
@@ -452,6 +467,7 @@ pub fn plan_for_device(
                 // its current link, so the orchestrator fills it in.
                 divert_main_wheel: None,
                 onboard: None,
+                stream_motion,
             },
             rearm_generation,
         },
@@ -810,6 +826,40 @@ mod tests {
                 "the untouched left tilt keeps its native horizontal scroll"
             );
         }
+    }
+
+    #[test]
+    fn only_a_button_with_a_pan_direction_streams_its_travel() {
+        let mut cfg = Config::default();
+        for button in [ButtonId::MiddleClick, ButtonId::GestureButton] {
+            cfg.set_gesture_mode("2b01a", button, true);
+        }
+        for direction in [
+            GestureDirection::Up,
+            GestureDirection::Down,
+            GestureDirection::Left,
+            GestureDirection::Right,
+        ] {
+            cfg.set_gesture_direction("2b01a", ButtonId::MiddleClick, direction, Action::Pan);
+        }
+
+        // A tilt pans over HID++ on every platform.
+        cfg.set_gesture_mode("2b01a", ButtonId::WheelTiltRight, true);
+        cfg.set_gesture_direction(
+            "2b01a",
+            ButtonId::WheelTiltRight,
+            GestureDirection::Up,
+            Action::Pan,
+        );
+
+        let plan = plan_for_device(&cfg, "2b01a", route(), None, 0, true);
+        let expected: &[ButtonId] = if cfg!(any(target_os = "macos", target_os = "windows")) {
+            // Middle Click gestures over HID++ raw XY only on these.
+            &[ButtonId::MiddleClick, ButtonId::WheelTiltRight]
+        } else {
+            &[ButtonId::WheelTiltRight]
+        };
+        assert_eq!(plan.target.spec.stream_motion, expected);
     }
 
     #[test]

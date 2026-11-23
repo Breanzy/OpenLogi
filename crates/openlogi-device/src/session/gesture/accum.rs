@@ -72,6 +72,19 @@ pub(super) struct CaptureAccum {
     /// Diverted standard-button and wheel-hold CIDs held in the last event,
     /// in press order.
     buttons_down: Vec<u16>,
+    /// Buttons whose held raw-XY travel is streamed as
+    /// [`CapturedInput::HeldMotion`] (see `CaptureSpec::stream_motion`).
+    stream_motion: Vec<ButtonId>,
+}
+
+impl CaptureAccum {
+    /// An accumulator that also streams the held travel of `stream_motion`.
+    pub(super) fn streaming(stream_motion: Vec<ButtonId>) -> Self {
+        Self {
+            stream_motion,
+            ..Self::default()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -251,6 +264,13 @@ impl CaptureAccum {
         // control — drop it rather than miscommit a swipe through the holder's map.
         if *overlap {
             return;
+        }
+        if self.stream_motion.contains(button) && (dx != 0 || dy != 0) {
+            let _ = sink.send(CapturedInput::HeldMotion {
+                button: *button,
+                dx,
+                dy,
+            });
         }
         // Commit the instant a clean direction emerges (mid-swipe, repeatable per hold);
         // the accumulator gates on hold duration internally and drops travel that

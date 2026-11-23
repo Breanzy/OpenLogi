@@ -686,6 +686,29 @@ and turning gestures back on restores the saved directions. The setting is per
 device, not per application: an app profile that gives the button its own
 action replaces the wheel hold in that application.
 
+`Pan` is a gesture direction, offered only in a gesture map, as Logi Options+'s
+Pan gesture is. While the button is held, its travel scrolls instead of moving
+the pointer: travel toward you moves the view down the page, travel to the right
+moves it right, and the device's `invert_scroll` reverses both. Left or Right
+set to `Pan` pans horizontally, Up or Down vertically, and an axis whose
+directions name other actions keeps swiping them. A hold that did not travel
+far enough to swipe still runs `Click`.
+
+```toml
+[devices."<physical-key>".bindings.MiddleClick]
+Click = "MiddleClick"
+Up = "Pan"
+Down = "Pan"
+Left = "Pan"
+Right = "Pan"
+```
+
+Pan needs a control that reports raw XY over HID++. On macOS and Windows that
+covers Middle Click, Back and Forward where the mouse advertises it (with the
+mouse hook available), and on every platform the gesture button, DPI/ModeShift
+and the wheel tilts. A button gesturing through the OS hook instead, such as
+Middle Click on Linux, swipes but does not pan.
+
 An Actions Ring entry wraps the action and may add an icon or literal label:
 
 ```toml

@@ -187,3 +187,39 @@ fn shift_layer_stays_on_until_every_shift_button_is_released() {
     assert!(held.release(&session, ButtonId::Forward));
     assert!(!held.active(&session));
 }
+
+/// Pan follows the hand: travel toward the user moves the view down the page
+/// and rightward travel moves it right, reversed by scroll inversion, and an
+/// axis the map does not pan stays still.
+#[test]
+fn pan_scrolls_with_the_held_travel_on_its_own_axes() {
+    let both = PanAxes {
+        horizontal: true,
+        vertical: true,
+    };
+    let close = |a: f64, b: f64| (a - b).abs() < f64::EPSILON;
+
+    let pixels = pan_scroll(10, 20, both, false, true);
+    assert!(matches!(pixels, ScrollDelta::Pixels { .. }));
+    assert!(
+        close(pixels.x(), 10.0) && close(pixels.y(), -20.0),
+        "{pixels:?}"
+    );
+
+    let grab = pan_scroll(10, 20, both, true, true);
+    assert!(close(grab.x(), -10.0) && close(grab.y(), 20.0), "{grab:?}");
+
+    let ticks = pan_scroll(40, -80, both, false, false);
+    assert!(matches!(ticks, ScrollDelta::WheelTicks { .. }));
+    assert!(close(ticks.x(), 1.0) && close(ticks.y(), 2.0), "{ticks:?}");
+
+    let vertical_only = PanAxes {
+        horizontal: false,
+        vertical: true,
+    };
+    let delta = pan_scroll(50, 10, vertical_only, false, true);
+    assert!(
+        close(delta.x(), 0.0) && close(delta.y(), -10.0),
+        "{delta:?}"
+    );
+}

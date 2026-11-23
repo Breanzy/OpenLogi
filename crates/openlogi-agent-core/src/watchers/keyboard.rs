@@ -216,6 +216,7 @@ fn dispatch_input(
         | CapturedInput::Scroll { .. }
         | CapturedInput::ButtonDiverted(_)
         | CapturedInput::HeldWheel { .. }
+        | CapturedInput::HeldMotion { .. }
         | CapturedInput::MainWheel { .. }
         | CapturedInput::HostModeEntered => {}
     }
