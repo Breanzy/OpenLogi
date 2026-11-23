@@ -444,8 +444,6 @@ fn unsupported_controls_cannot_enter_gesture_mode_through_the_ui_state() {
     for button in [
         ButtonId::LeftClick,
         ButtonId::RightClick,
-        ButtonId::WheelTiltLeft,
-        ButtonId::WheelTiltRight,
         ButtonId::Thumbwheel,
         ButtonId::ThumbwheelScrollUp,
         ButtonId::ThumbwheelScrollDown,
@@ -454,6 +452,30 @@ fn unsupported_controls_cannot_enter_gesture_mode_through_the_ui_state() {
         assert!(
             !state.config.is_gesture_mode(KNOWN_MOUSE_KEY, button),
             "unsupported control {button:?} entered gesture mode"
+        );
+    }
+}
+
+#[test]
+fn wheel_tilts_can_enter_gesture_mode_keeping_their_click() {
+    let mut state = state_with_a_known_mouse();
+
+    for (tilt, click) in [
+        (ButtonId::WheelTiltLeft, Action::HorizontalScrollLeft),
+        (ButtonId::WheelTiltRight, Action::HorizontalScrollRight),
+    ] {
+        let _ = state.commit_gesture_mode(tilt, true);
+        assert!(
+            state.config.is_gesture_mode(KNOWN_MOUSE_KEY, tilt),
+            "{tilt:?}"
+        );
+        assert_eq!(
+            state
+                .current_gesture_maps()
+                .get(&tilt)
+                .and_then(|map| map.get(&GestureDirection::Click)),
+            Some(&click),
+            "{tilt:?} must keep its native scroll as the click"
         );
     }
 }

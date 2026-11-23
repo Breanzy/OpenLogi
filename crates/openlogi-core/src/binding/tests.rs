@@ -668,7 +668,7 @@ fn haptic_panel_defaults_to_opening_the_actions_ring() {
 }
 
 #[test]
-fn gesture_mode_includes_middle_click_but_excludes_primary_clicks_and_wheel_motion() {
+fn gesture_mode_includes_middle_click_and_tilts_but_excludes_primary_clicks_and_wheel_motion() {
     let supported: Vec<_> = ButtonId::ALL
         .into_iter()
         .filter(|button| button.supports_gesture_mode())
@@ -678,6 +678,8 @@ fn gesture_mode_includes_middle_click_but_excludes_primary_clicks_and_wheel_moti
         supported,
         vec![
             ButtonId::MiddleClick,
+            ButtonId::WheelTiltLeft,
+            ButtonId::WheelTiltRight,
             ButtonId::Back,
             ButtonId::Forward,
             ButtonId::DpiToggle,
@@ -706,6 +708,7 @@ fn wheel_tilt_defaults_to_the_scroll_its_firmware_already_does() {
         // a horizontal scroll, not a button, and it swipes nothing.
         assert!(!tilt.is_os_hook_button());
         assert!(!tilt.is_hidpp_gesture_source());
+        assert!(tilt.is_wheel_tilt());
     }
 }
 

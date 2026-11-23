@@ -240,6 +240,71 @@ async fn m720_gesture_button_arms_from_its_reported_control_table() {
     }
 }
 
+/// The M720 Triathlon's wheel tilts advertise raw XY, so a tilt in gesture
+/// mode is armed for swipes. A tilt without raw XY has no OS-hook fallback, so
+/// it is plain-diverted as a gesture button and its press still ends as the
+/// map's click. Middle Click without raw XY instead stays native for the hook.
+#[tokio::test]
+async fn wheel_tilt_gestures_arm_raw_xy_or_fall_back_to_a_plain_click() {
+    for (cid, button, raw_xy, expected_flags, armed_as_gesture) in [
+        (0x005b_u16, ButtonId::WheelTiltLeft, true, vec![0x33], true),
+        (0x005d, ButtonId::WheelTiltRight, false, vec![0x23], true),
+        (0x0052, ButtonId::MiddleClick, false, vec![], false),
+    ] {
+        let (raw, handle) = ScriptedRawHidChannel::with_dynamic_responder(move |request| {
+            let mut response = vec![0; 20];
+            response[..4].copy_from_slice(&request[..4]);
+            response[0] = 0x11;
+            match (request[2], request[3] >> 4) {
+                (0, 1) => response[4] = 4,
+                (0, 0) => response[4] = 2,
+                (2, 0) => response[4] = 1,
+                (2, 1) => {
+                    response[4..6].copy_from_slice(&cid.to_be_bytes());
+                    response[6..8].copy_from_slice(&cid.to_be_bytes());
+                    // mse, reprogrammable, divertable, persistently divertable
+                    response[8] = 0x31;
+                    response[12] = u8::from(raw_xy);
+                }
+                (2, 2) => response[4..6].copy_from_slice(&cid.to_be_bytes()),
+                (2, 3) => return Some(request.to_vec()),
+                _ => panic!("unexpected capture request: {request:02x?}"),
+            }
+            Some(response)
+        });
+        let channel = scripted_channel(raw).await;
+        let device = Device::new(channel.clone(), 0xff).await.unwrap();
+        let spec = CaptureSpec {
+            divert_gesture_buttons: vec![(cid, button)],
+            ..CaptureSpec::default()
+        };
+        let mut armed = ArmedControls::default();
+        arm_controls_into(&device, &channel, 0xff, &spec, &mut armed)
+            .await
+            .unwrap();
+        let writes: Vec<_> = handle
+            .written_reports()
+            .into_iter()
+            .filter(|report| report[2] == 2 && report[3] >> 4 == 3)
+            .map(|report| {
+                assert_eq!(u16::from_be_bytes([report[4], report[5]]), cid);
+                report[6]
+            })
+            .collect();
+        assert_eq!(writes, expected_flags, "{button:?}, raw XY {raw_xy}");
+        assert_eq!(
+            armed.gesture_button_cids,
+            if armed_as_gesture {
+                vec![(cid, button)]
+            } else {
+                vec![]
+            },
+            "{button:?}, raw XY {raw_xy}"
+        );
+        assert!(armed.button_cids.is_empty(), "{button:?}");
+    }
+}
+
 /// The first-generation MX Master's gesture button is divertable but reports
 /// no raw XY (`mse, reprogrammable, divertable`). Left native in gesture
 /// mode, its firmware ran its own action in place of the configured click

@@ -14,7 +14,9 @@ use std::sync::Arc;
 use openlogi_core::binding::{
     Action, Binding, ButtonId, GamingLayout, GestureDirection, default_binding,
 };
-use openlogi_core::bindings::{button_bindings_for, hidpp_gesture_maps_for, oshook_gestures_for};
+use openlogi_core::bindings::{
+    button_bindings_for, hidpp_gesture_maps_for, oshook_gestures_for, tilt_gestures_for,
+};
 use openlogi_core::config::{Config, MomentumScrolling, OnboardMemory, ThumbwheelSensitivity};
 use openlogi_core::device_order::PhysicalDeviceKey;
 use openlogi_hid::DeviceRoute;
@@ -307,6 +309,27 @@ pub struct PlanDevice<'a> {
     pub layout: Option<&'a GamingLayout>,
 }
 
+/// The standard `0x1b04` buttons to request as raw-XY gesture buttons.
+///
+/// Middle/Back/Forward join only with the OS mouse hook available (see
+/// [`hidpp_side_gesture_maps_for`]). Wheel tilts reach the host only over
+/// HID++, so a tilt in gesture mode is requested on every platform, with or
+/// without the hook; arming uses raw XY where the control advertises it and
+/// otherwise diverts it plainly, so its press still ends as the map's `Click`.
+fn standard_gesture_buttons(
+    side_gestures: &BTreeMap<ButtonId, BTreeMap<GestureDirection, Action>>,
+    tilt_gestures: &BTreeMap<ButtonId, BTreeMap<GestureDirection, Action>>,
+    os_mouse_hook_available: bool,
+) -> Vec<(u16, ButtonId)> {
+    DIVERTABLE_STANDARD_BUTTONS
+        .into_iter()
+        .filter(|(_, button)| {
+            (os_mouse_hook_available && side_gestures.contains_key(button))
+                || tilt_gestures.contains_key(button)
+        })
+        .collect()
+}
+
 /// Build one device's plan from the config (per-app effective for `app`).
 #[must_use]
 pub fn plan_for_device(
@@ -326,19 +349,17 @@ pub fn plan_for_device(
     // press. Back/Forward may additionally request device-owned HID++ raw XY:
     // macOS uses it exclusively, while Windows keeps the hook as fallback.
     let oshook = oshook_gestures_for(config, Some(config_key), app);
-    let side_gesture_bindings = hidpp_side_gesture_maps_for(config, config_key, app);
+    let mut side_gesture_bindings = hidpp_side_gesture_maps_for(config, config_key, app);
     // One direction map per HID++ source in gesture mode — several may
     // gesture at once, each armed with its own raw-XY divert (the capture
     // target below derives the CIDs to divert from this map's keys).
     let gesture_bindings = hidpp_gesture_maps_for(config, Some(config_key), app);
-    let mut divert_gesture_buttons = Vec::new();
-    if os_mouse_hook_available {
-        divert_gesture_buttons.extend(
-            DIVERTABLE_STANDARD_BUTTONS
-                .into_iter()
-                .filter(|(_, button)| side_gesture_bindings.contains_key(button)),
-        );
-    }
+    let tilt_gestures = tilt_gestures_for(config, config_key, app);
+    let mut divert_gesture_buttons = standard_gesture_buttons(
+        &side_gesture_bindings,
+        &tilt_gestures,
+        os_mouse_hook_available,
+    );
     if gesture_bindings.contains_key(&ButtonId::DpiToggle) {
         divert_gesture_buttons.extend(
             DPI_MODE_SHIFT_CIDS
@@ -378,6 +399,8 @@ pub fn plan_for_device(
             config.app_settings.capture_mouse_events || !button.is_os_hook_button()
         })
         .filter(|(_, button)| !oshook.contains_key(button))
+        // A gesturing tilt is owned by its gesture divert above.
+        .filter(|(_, button)| !tilt_gestures.contains_key(button))
         .filter(|entry| !divert_wheel_buttons.contains(entry))
         .filter(|(_, button)| {
             bindings.get(button).is_some_and(|binding| {
@@ -397,6 +420,7 @@ pub fn plan_for_device(
             })
         })
         .collect();
+    side_gesture_bindings.extend(tilt_gestures);
     let thumbwheel_bindings_nondefault = [
         ButtonId::Thumbwheel,
         ButtonId::ThumbwheelScrollUp,
@@ -738,6 +762,54 @@ mod tests {
                 .any(|&(_, button)| button == ButtonId::WheelTiltRight),
             "the untouched right tilt must keep its native horizontal scroll"
         );
+    }
+
+    #[test]
+    fn gesturing_wheel_tilt_is_a_hidpp_gesture_button_on_every_platform() {
+        // A tilt is invisible to the OS hook, so its gesture map must reach
+        // HID++ capture whether or not the hook is available, and its CID must
+        // be owned by the gesture divert rather than also plain-diverted.
+        let mut cfg = Config::default();
+        cfg.set_gesture_mode("2b01a", ButtonId::WheelTiltRight, true);
+        cfg.set_gesture_direction(
+            "2b01a",
+            ButtonId::WheelTiltRight,
+            GestureDirection::Up,
+            Action::VolumeUp,
+        );
+
+        for hook in [true, false] {
+            let plan = plan_for_device(&cfg, "2b01a", route(), None, 0, hook);
+            assert_eq!(
+                plan.target.spec.divert_gesture_buttons,
+                vec![(0x005d, ButtonId::WheelTiltRight)],
+                "hook available: {hook}"
+            );
+            assert!(
+                !plan
+                    .target
+                    .spec
+                    .divert_buttons
+                    .iter()
+                    .any(|&(_, button)| button.is_wheel_tilt()),
+                "a gesturing tilt must not also be plain-diverted: {:?}",
+                plan.target.spec.divert_buttons
+            );
+            assert_eq!(
+                plan.dispatch
+                    .side_gesture_bindings
+                    .get(&ButtonId::WheelTiltRight)
+                    .and_then(|map| map.get(&GestureDirection::Up)),
+                Some(&Action::VolumeUp)
+            );
+            assert!(
+                !plan
+                    .dispatch
+                    .side_gesture_bindings
+                    .contains_key(&ButtonId::WheelTiltLeft),
+                "the untouched left tilt keeps its native horizontal scroll"
+            );
+        }
     }
 
     #[test]

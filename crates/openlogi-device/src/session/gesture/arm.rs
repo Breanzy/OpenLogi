@@ -320,13 +320,29 @@ pub(super) async fn arm_controls_into(
             armed.gesture_cids.push(cid);
         }
         for &(cid, button) in &spec.divert_gesture_buttons {
-            if let Some(control) = controls.iter().find(|c| c.cid == cid)
-                && control.is_divertable()
-                && control.supports_raw_xy()
-            {
-                arm_reprog_control(&rc, cid, PointerDivert::RawXy, &mut armed.reporting).await?;
-                armed.gesture_button_cids.push((cid, button));
-            }
+            let Some(control) = controls.iter().find(|c| c.cid == cid && c.is_divertable()) else {
+                continue;
+            };
+            let divert = if control.supports_raw_xy() {
+                PointerDivert::RawXy
+            } else if button.is_wheel_tilt() {
+                // A tilt has no OS-hook fallback: left native it would keep
+                // scrolling instead of running the configured click. Divert it
+                // plainly as a gesture button, so a hold that cannot move
+                // still ends as the map's `Click`, as a gesture source without
+                // raw XY does above.
+                info!(
+                    cid = format_args!("{cid:#06x}"),
+                    "wheel tilt reports no raw XY — armed for its click only"
+                );
+                PointerDivert::Plain
+            } else {
+                // Middle/Back/Forward keep the OS hook as their fallback, and
+                // DPI/ModeShift stays native (see below).
+                continue;
+            };
+            arm_reprog_control(&rc, cid, divert, &mut armed.reporting).await?;
+            armed.gesture_button_cids.push((cid, button));
         }
         for &cid in &reprog_controls::DPI_MODE_SHIFT_CIDS {
             let gesture_requested = spec

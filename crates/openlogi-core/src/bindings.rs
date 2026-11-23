@@ -179,6 +179,29 @@ pub fn hidpp_gesture_maps_for(
         .collect()
 }
 
+/// Per-direction maps for every wheel tilt with a stored gesture binding on
+/// `config_key`, with `app_bundle`'s per-app overlay applied. A tilt never
+/// reaches the OS hook, so these maps are dispatched only from HID++ capture:
+/// raw-XY swipes where the control advertises raw XY, and the map's `Click`
+/// alone where it does not. Like [`oshook_gestures_for`], this returns each
+/// tilt's stored map as is; a tilt in single-action mode has no entry.
+#[must_use]
+pub fn tilt_gestures_for(
+    config: &Config,
+    config_key: &str,
+    app_bundle: Option<&str>,
+) -> BTreeMap<ButtonId, BTreeMap<GestureDirection, Action>> {
+    config
+        .effective_bindings(config_key, app_bundle)
+        .into_iter()
+        .filter(|(id, _)| id.is_wheel_tilt())
+        .filter_map(|(id, binding)| match binding {
+            Binding::Gesture(map) => Some((id, map)),
+            Binding::Single(_) | Binding::LongPress(_) | Binding::WheelHold(_) => None,
+        })
+        .collect()
+}
+
 /// Per-direction maps for every OS-hook button with a stored gesture binding on
 /// `config_key`, with `app_bundle`'s per-app overlay applied, for the OS hook to
 /// resolve a hold+swipe. Middle Click, Back, and Forward can each enter

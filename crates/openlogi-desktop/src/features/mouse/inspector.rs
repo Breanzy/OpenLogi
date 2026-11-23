@@ -1059,6 +1059,8 @@ mod tests {
             supported,
             vec![
                 ButtonId::MiddleClick,
+                ButtonId::WheelTiltLeft,
+                ButtonId::WheelTiltRight,
                 ButtonId::Back,
                 ButtonId::Forward,
                 ButtonId::DpiToggle,

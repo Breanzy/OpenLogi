@@ -8,6 +8,7 @@ use openlogi_core::binding::{
 };
 use openlogi_core::bindings::{
     bindings_for, button_bindings_for, hidpp_gesture_maps_for, oshook_gestures_for,
+    tilt_gestures_for,
 };
 use openlogi_core::config::{Config, KeyTrigger};
 use tracing::debug;
@@ -152,6 +153,7 @@ fn gesture_maps_for(
     };
     let mut maps = hidpp_gesture_maps_for(config, Some(key), None);
     maps.extend(oshook_gestures_for(config, Some(key), None));
+    maps.extend(tilt_gestures_for(config, key, None));
     maps
 }
 

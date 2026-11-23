@@ -179,6 +179,13 @@ Common device fields are:
   set back to the Settings › General value
 - `bindings`: a button maps to one action, an independent short/long action
   pair, or a gesture-direction map.
+  Gesture maps are offered on `MiddleClick`, `Back`, `Forward`,
+  `GestureButton`, `DpiToggle`, `HapticPanel`, and the wheel tilts
+  `WheelTiltLeft` and `WheelTiltRight`. A tilt is captured over HID++ on every
+  platform: where its control reports raw XY (as on the M720 Triathlon), holding
+  the tilt and moving the mouse runs a direction; otherwise only its `Click`
+  runs. A tilt in gesture mode no longer scrolls sideways unless its `Click`
+  is the scroll action it had before.
   `Thumbwheel` is the thumb wheel's capacitive tap — it has no GUI control and
   stays inert unless bound here, because the wheel reports taps from incidental
   thumb contact as well as from deliberate ones.
